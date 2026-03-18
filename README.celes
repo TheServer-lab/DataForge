@@ -1,0 +1,166 @@
+<!Celes-0.1.5>
+<title>{DataForge — README}
+<author>{Sourasish Das}
+<background>{}
+
+<header -size=1>{🔩 DataForge}
+<line>{A <bold>{minimal, deterministic, LLM-friendly} line-based file manipulation DSL.}
+<newline>
+
+<line>{<button -body=PyPI>{https://pypi.org/project/dfgscript/} <button -body=License: SOCL>{https://github.com/TheServer-lab/Celes/blob/main/LICENSE} <button -body=Python 3.9+>{https://python.org}}
+<newline>
+
+<codeblock>{
+create-file "notes.txt"
+
+1+Hello world
+2+This is a test file
+3+It has some content
+4+End of file}
+
+<insertspace>
+
+<section>{Why DataForge?}
+<line>{Scripts and LLMs need a way to create and edit files that is <bold>{safe by default}. Direct filesystem access is too powerful — a single bad write can corrupt a project silently.}
+<newline>
+<line>{DataForge gives them a small, composable set of line-level primitives instead:}
+<newline>
+<list -bullet=circle>{<bold>{Deterministic} — same script, same result, every time}
+<list -bullet=circle>{<bold>{Safe} — conditional deletes never destroy data on mismatch}
+<list -bullet=circle>{<bold>{Atomic} — writes go to a temp file first, then rename over the original}
+<list -bullet=circle>{<bold>{Readable} — a human or an LLM can understand any <code>{.dfg} file at a glance}
+
+<insertspace>
+
+<section>{Installation}
+<codeblock>{pip install dfgscript}
+<line>{Requires Python 3.9+. No external dependencies.}
+
+<insertspace>
+
+<section>{CLI}
+<codeblock>{# Execute a script
+dataforge script.dfg
+
+# Preview without writing anything
+dataforge script.dfg --dry-run
+
+# Save a timestamped backup before writing
+dataforge script.dfg --backup-dir .backups
+
+# Module invocation
+py -m dataforge script.dfg}
+
+<line>{All three entry points do the same thing: <code>{dataforge}, <code>{build}, <code>{py -m dataforge}.}
+
+<insertspace>
+
+<section>{DSL Reference}
+<header -size=3>{File-level commands}
+<table>{Command, Behaviour}
+<item>{create-file "path", Create new file — error if it already exists}
+<item>{replace-file "path", Overwrite unconditionally}
+<item>{change-file "path", Patch existing file (creates if absent)}
+<newline>
+
+<header -size=3>{Line-level operations}
+<table>{Operation, Meaning}
+<item>{N+text, Write or replace line N (expands file with empty lines if needed)}
+<item>{N-"text", Delete line N only if content matches exactly — warns and skips on mismatch}
+<item>{N>text, Insert text after line N — shifts the rest of the file down}
+<item>{$+text, Append as new final line}
+<newline>
+
+<header -size=3>{Comments and blank lines}
+<codeblock>{# Lines starting with # are comments and are ignored
+# Blank lines in a .dfg are also ignored}
+
+<insertspace>
+
+<section>{Examples}
+<header -size=3>{Create a file}
+<codeblock>{create-file "notes.txt"
+
+1+Hello world
+2+This is a test file
+3+It has some content
+4+End of file}
+
+<header -size=3>{Edit a file}
+<codeblock>{change-file "notes.txt"
+
+# Delete line 2 only if it still matches the original
+2-"This is a test file"
+2+This is an edited file
+
+# Delete line 3 only if it matches
+3-"It has some content"
+
+# Insert a new line after line 1
+1>Inserted line here
+
+# Append to end
+$+--- EOF ---}
+
+<line>{<bold>{Result:}}
+<list -bullet=number>{Hello world}
+<list -bullet=number>{Inserted line here}
+<list -bullet=number>{This is an edited file}
+<list -bullet=number>{End of file}
+<list -bullet=number>{--- EOF ---}
+<newline>
+
+<header -size=3>{Replace a file}
+<codeblock>{replace-file "log.txt"
+
+1+Log created
+2+Operation successful}
+
+<insertspace>
+
+<section>{Python API}
+<codeblock>{from dataforge import parse, run
+
+source = open("edit.dfg").read()
+script = parse(source)                        # → DfgScript
+
+lines  = run(script, dry_run=True)            # preview only
+lines  = run(script, backup_dir=".backups")   # write + backup}
+
+<insertspace>
+
+<section>{CLI Flags}
+<table>{Flag, Description}
+<item>{--dry-run / --preview, Show result without writing any files}
+<item>{--backup-dir PATH, Save a timestamped .bak copy before each write}
+<item>{--log PATH, Append log output to a file}
+<item>{--verbose / -v, Debug-level detail for every operation}
+<item>{--version, Print version and exit}
+
+<insertspace>
+
+<section>{Security}
+<list -bullet=circle>{Path traversal (<code>{..}) is blocked by default}
+<list -bullet=circle>{No shell code is ever executed}
+<list -bullet=circle>{Atomic rename semantics prevent partial writes}
+<list -bullet=circle>{Transactional apply — original is only replaced on full success}
+
+<insertspace>
+
+<section>{Project Structure}
+<codeblock>{dataforge_pkg/
+├── pyproject.toml          ← pip install .
+├── README.md
+├── README.celes
+├── tests.py
+└── dataforge/
+    ├── __init__.py         ← public Python API
+    ├── __main__.py         ← py -m dataforge
+    ├── parser.py           ← .dfg → DfgScript AST
+    ├── interpreter.py      ← executes the AST
+    └── cli.py              ← argparse CLI}
+
+<insertspace>
+
+<section>{License}
+<line>{<link -body=Server-Lab Open-Control License (SOCL) 1.0>{https://github.com/TheServer-lab/Celes/blob/main/LICENSE} — Copyright © 2025 Sourasish Das.}
