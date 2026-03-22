@@ -1,112 +1,110 @@
 # 🔩 DataForge
 
-A **minimal, deterministic, LLM-friendly** line-based file manipulation DSL.
+> A minimal, deterministic, LLM-friendly, line-based file manipulation DSL.
 
-[![PyPI](https://img.shields.io/pypi/v/dfgscript?label=PyPI)](https://pypi.org/project/dfgscript/)
-[![License: SOCL](https://img.shields.io/badge/license-SOCL--1.0-lightgrey)](https://github.com/TheServer-lab/Celes/blob/main/LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
-
-```dfg
-create-file "notes.txt"
-
-1+Hello world
-2+This is a test file
-3+It has some content
-4+End of file
-```
+[![PyPI version](https://img.shields.io/pypi/v/dfgscript)](https://pypi.org/project/dfgscript/)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
+[![License](https://img.shields.io/badge/license-SOCL-lightgrey)](./LICENSE)
 
 ---
 
-## Why DataForge?
-
-Scripts and LLMs need a way to create and edit files that is **safe by default**. Direct filesystem access is too powerful — a single bad write can corrupt a project silently.
-
-DataForge gives them a small, composable set of line-level primitives instead:
-
-- **Deterministic** — same script, same result, every time
-- **Safe** — conditional deletes never destroy data on mismatch
-- **Atomic** — writes go to a temp file first, then rename over the original
-- **Readable** — a human or an LLM can understand any `.dfg` file at a glance
-
----
-
-## Installation
+## Install
 
 ```bash
 pip install dfgscript
 ```
 
-Requires Python 3.9+. No external dependencies.
-
----
-
-## CLI
+Afterwards three entry points are available:
 
 ```bash
-# Execute a script
-dataforge script.dfg
-
-# Preview without writing anything
-dataforge script.dfg --dry-run
-
-# Save a timestamped backup before writing
-dataforge script.dfg --backup-dir .backups
-
-# Module invocation
-py -m dataforge script.dfg
-```
-
-All three entry points do the same thing: `dataforge`, `build`, `py -m dataforge`.
-
----
-
-## DSL Reference
-
-### File-level commands
-
-| Command | Behaviour |
-|---|---|
-| `create-file "path"` | Create new file — error if it already exists |
-| `replace-file "path"` | Overwrite unconditionally |
-| `change-file "path"` | Patch existing file (creates if absent) |
-
-### Line-level operations
-
-| Operation | Meaning |
-|---|---|
-| `N+text` | Write or replace line N (expands file with empty lines if needed) |
-| `N-"text"` | Delete line N only if content matches exactly — warns and skips on mismatch |
-| `N>text` | Insert text after line N — shifts the rest of the file down |
-| `$+text` | Append as new final line |
-
-### Comments and blank lines
-
-```dfg
-# Lines starting with # are comments and are ignored
-# Blank lines in a .dfg are also ignored
+dataforge script.dfg          # canonical command
+build     script.dfg          # alias matching the spec
+py -m dataforge script.dfg    # module invocation
 ```
 
 ---
 
-## Examples
-
-### Create a file
+## Quick example
 
 ```dfg
 create-file "notes.txt"
-
 1+Hello world
 2+This is a test file
 3+It has some content
 4+End of file
+end-file
 ```
 
-### Edit a file
+```bash
+dataforge notes.dfg           # write the file
+dataforge notes.dfg --dry-run # preview without writing
+```
+
+---
+
+## Multi-file support (v0.3)
+
+A single `.dfg` script can create and edit multiple files at once. Each block
+is explicitly closed with `end-file`:
+
+```dfg
+create-file "notes.txt"
+1+Hello
+end-file
+
+create-file "Hi.txt"
+1+Hi
+end-file
+```
+
+Rules:
+- Every block must be closed with `end-file` before opening a new one
+- A single block without `end-file` is still valid (v0.2 backwards compatibility)
+- If a block fails fatally, execution stops and later blocks are not run
+
+---
+
+## DSL reference
+
+### File-level commands
+
+```
+create-file "path"    # create new file — error if it already exists
+replace-file "path"   # overwrite file unconditionally
+change-file "path"    # patch existing file (creates if absent)
+remove-file "path"    # delete a file — error if it does not exist
+new-folder "path"     # create a folder — error if it already exists
+set-folder "path"     # create a folder + parents silently (mkdir -p)
+remove-folder "path"  # delete a folder and all its contents
+end-file              # close the current block
+```
+
+### Line-level operations
+
+```
+N+<text>      # write/replace line N  (expands file with "" if N > length)
+N-            # delete line N unconditionally (warns if N out of range)
+N><text>      # insert <text> after line N  (shifts tail down)
+$+<text>      # append as new final line
+```
+
+### Comments & blank lines
+
+```dfg
+# This is a comment — ignored by the parser
+```
+
+Blank lines in a `.dfg` are also ignored. To write an actual blank line into
+a target file use `N+` with no text: `3+`
+
+---
+
+## Edit example
 
 ```dfg
 change-file "notes.txt"
 
-# Delete line 2 only if it still matches the original
+# Delete line 2 only if it still matches exactly
 2-"This is a test file"
 2+This is an edited file
 
@@ -118,24 +116,91 @@ change-file "notes.txt"
 
 # Append to end
 $+--- EOF ---
+end-file
 ```
 
 **Result:**
+1. `Hello world`
+2. `Inserted line here`
+3. `This is an edited file`
+4. `End of file`
+5. `--- EOF ---`
 
-1. Hello world
-2. Inserted line here
-3. This is an edited file
-4. End of file
-5. --- EOF ---
+---
 
-### Replace a file
+## Scaffold example
+
+DataForge can bootstrap an entire project structure in one script:
 
 ```dfg
-replace-file "log.txt"
+new-folder "myapp"
+end-file
 
-1+Log created
-2+Operation successful
+new-folder "myapp/src"
+end-file
+
+new-folder "myapp/tests"
+end-file
+
+create-file "myapp/src/main.py"
+1+# entry point
+end-file
+
+create-file "myapp/README.md"
+1+# myapp
+end-file
 ```
+
+```bash
+dataforge scaffold.dfg
+```
+
+## Box variables
+
+Declare a **box** to store a value and use `[name]` to interpolate it anywhere — in paths, line operations, even folder names.
+
+```dfg
+box name = "RICK"
+
+create-file "[name].txt"
+1+[name] is the name
+end-file
+```
+
+Boxes can be used across multiple blocks in the same script:
+
+```dfg
+box project = "myapp"
+box author  = "Sourasish"
+
+new-folder "[project]"
+end-file
+
+new-folder "[project]/src"
+end-file
+
+create-file "[project]/README.md"
+1+# [project]
+2+Author: [author]
+end-file
+```
+
+Rules:
+- Declare with `box name = "value"` — values are always quoted strings
+- Interpolate with `[name]` anywhere in paths or line content
+- Re-declaring a box overrides its previous value
+- Using an undeclared box is a **parse error**
+- Inline comments after the value are allowed: `box name = "RICK" # the author`
+
+## CLI flags
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` / `--preview` | Show resulting file(s); do **not** write anything |
+| `--backup-dir PATH` | Save a timestamped `.bak` copy before each write |
+| `--log PATH` | Append log output to a file |
+| `--verbose` / `-v` | Debug-level logging of every operation |
+| `--version` | Print version and exit |
 
 ---
 
@@ -144,24 +209,15 @@ replace-file "log.txt"
 ```python
 from dataforge import parse, run
 
-source = open("edit.dfg").read()
-script = parse(source)                        # → DfgScript
+# Multi-file — parse() returns a list of DfgScript blocks
+scripts = parse(open("edit.dfg").read())
+results = run(scripts, dry_run=True)   # → { "path": ["line", ...], ... }
 
-lines  = run(script, dry_run=True)            # preview only
-lines  = run(script, backup_dir=".backups")   # write + backup
+# Single-file convenience
+from dataforge import parse_one
+script  = parse_one(open("single.dfg").read())
+results = run(script, backup_dir=".backups")
 ```
-
----
-
-## CLI Flags
-
-| Flag | Description |
-|---|---|
-| `--dry-run` / `--preview` | Show result without writing any files |
-| `--backup-dir PATH` | Save a timestamped .bak copy before each write |
-| `--log PATH` | Append log output to a file |
-| `--verbose` / `-v` | Debug-level detail for every operation |
-| `--version` | Print version and exit |
 
 ---
 
@@ -169,12 +225,12 @@ lines  = run(script, backup_dir=".backups")   # write + backup
 
 - Path traversal (`..`) is blocked by default
 - No shell code is ever executed
-- Atomic rename semantics prevent partial writes
-- Transactional apply — original is only replaced on full success
+- Atomic rename semantics — original only replaced on full success
+- Transactional apply — writes go to a temp file first, then rename over the original
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 dataforge_pkg/
@@ -192,6 +248,104 @@ dataforge_pkg/
 
 ---
 
+## Changelog
+
+### v0.3.4
+- `N-` now has two forms:
+  - `N-` — unconditional delete (great for scaffolds and scripts that own the file)
+  - `N-"text"` — conditional delete (safe for LLMs editing existing files — errors if content has drifted)
+- Both forms error if line N does not exist
+- `[box]` interpolation works inside `N-"text"` conditions
+
+### v0.3.3
+- Added `box name = "value"` — declare a variable (box) anywhere in a script
+- Added `[name]` interpolation — use box values in paths and all line operations
+- Using an undeclared box is a parse error
+- Inline comments on box declarations are supported
+- DataForge is now a full scaffold template engine
+
+### v0.3.2
+- `N-` no longer requires a text match — it now deletes line N unconditionally
+- `N-` warns and skips if line N is out of range
+- Syntax simplified from `N-"text"` to just `N-`
+
+### v0.3.4
+- `N-` now has two forms:
+  - `N-` — unconditional delete (great for scaffolds and scripts that own the file)
+  - `N-"text"` — conditional delete (safe for LLMs editing existing files — errors if content has drifted)
+- Both forms error if line N does not exist
+- `[box]` interpolation works inside `N-"text"` conditions
+
+### v0.3.3
+- Added `box name = "value"` — declare a variable (box) anywhere in a script
+- Added `[name]` interpolation — use box values in paths and all line operations
+- Using an undeclared box is a parse error
+- Inline comments on box declarations are supported
+- DataForge is now a full scaffold template engine
+
+### v0.3.2
+- `N-` no longer requires a text argument — deletes line N unconditionally
+- Out-of-range deletes warn and skip instead of raising a fatal error
+
+### v0.3.4
+- `N-` now has two forms:
+  - `N-` — unconditional delete (great for scaffolds and scripts that own the file)
+  - `N-"text"` — conditional delete (safe for LLMs editing existing files — errors if content has drifted)
+- Both forms error if line N does not exist
+- `[box]` interpolation works inside `N-"text"` conditions
+
+### v0.3.3
+- Added `box name = "value"` — declare a variable (box) anywhere in a script
+- Added `[name]` interpolation — use box values in paths and all line operations
+- Using an undeclared box is a parse error
+- Inline comments on box declarations are supported
+- DataForge is now a full scaffold template engine
+
+### v0.3.2
+- `N-` no longer requires quoted text — deletes line N unconditionally
+- Out-of-range `N-` warns and skips instead of erroring
+
+### v0.3.4
+- `N-` now has two forms:
+  - `N-` — unconditional delete (great for scaffolds and scripts that own the file)
+  - `N-"text"` — conditional delete (safe for LLMs editing existing files — errors if content has drifted)
+- Both forms error if line N does not exist
+- `[box]` interpolation works inside `N-"text"` conditions
+
+### v0.3.3
+- Added `box name = "value"` — declare a variable (box) anywhere in a script
+- Added `[name]` interpolation — use box values in paths and all line operations
+- Using an undeclared box is a parse error
+- Inline comments on box declarations are supported
+- DataForge is now a full scaffold template engine
+
+### v0.3.2
+- Added `new-folder "path"` — create a folder; error if it already exists
+- Added `set-folder "path"` — create a folder and all parents silently (`mkdir -p`)
+- Added `remove-folder "path"` — delete a folder and all its contents
+- Folder commands respect `--dry-run` and `--backup-dir`
+- Line-level operations inside folder commands are a parse error
+- DataForge is now a scaffold tool for LLMs, scripts, and project generation
+
+### v0.3.1
+- Added `remove-file "path"` — deletes a file; errors if it does not exist
+- Respects `--backup-dir` and `--dry-run` like all other commands
+- Line-level operations inside a `remove-file` block are a parse error
+
+### v0.3.0
+- Multi-file support — a single `.dfg` can now target multiple files
+- New `end-file` terminator closes each block explicitly
+- `parse()` now returns `list[DfgScript]` instead of a single `DfgScript`
+- `parse_one()` added as a convenience wrapper for single-block scripts
+- `run()` now accepts either a single `DfgScript` or a `list[DfgScript]`
+- `run()` now returns `dict[path, list[str]]`
+- Full backwards compatibility with v0.2 single-block `.dfg` files
+
+### v0.2.0
+- Initial release
+
+---
+
 ## License
 
-[Server-Lab Open-Control License (SOCL) 1.0](https://github.com/TheServer-lab/Celes/blob/main/LICENSE) — Copyright © 2025 Sourasish Das.
+[Server-Lab Open-Control License (SOCL)](./LICENSE) — Copyright © 2025 Sourasish Das.
